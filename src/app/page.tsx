@@ -6,7 +6,6 @@ import { Header } from '@/components/Header';
 import { ChatPanel } from '@/components/ChatPanel';
 import { LiveDashboard } from '@/components/LiveDashboard';
 import { EventPlannerForm, EventFormData } from '@/components/EventPlannerForm';
-import { ApiKeyModal } from '@/components/ApiKeyModal';
 import { SavedPlansModal } from '@/components/SavedPlansModal';
 import { ExportModal } from '@/components/ExportModal';
 import { ChatMessage, EventPlan, EventSession } from '@/types/event';
@@ -14,6 +13,7 @@ import { formatCurrency } from '@/lib/formatters';
 
 export default function EventDropApp() {
   const { isSignedIn, user } = useUser();
+  const [mounted, setMounted] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [currentPlan, setCurrentPlan] = useState<EventPlan | null>(null);
   const [sessionId, setSessionId] = useState<string>('');
@@ -24,26 +24,17 @@ export default function EventDropApp() {
   const [activeView, setActiveView] = useState<'form' | 'chat' | 'checklist'>('form');
 
   // Modals state
-  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isSavedModalOpen, setIsSavedModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
     const existingKey = localStorage.getItem('gemini_api_key') || '';
     setCustomApiKey(existingKey);
 
     const newSessionId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
     setSessionId(newSessionId);
   }, []);
-
-  const handleSaveApiKey = (key: string) => {
-    setCustomApiKey(key);
-    if (key) {
-      localStorage.setItem('gemini_api_key', key);
-    } else {
-      localStorage.removeItem('gemini_api_key');
-    }
-  };
 
   const handleNewPlan = () => {
     const newSessionId = `evt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
@@ -127,14 +118,20 @@ export default function EventDropApp() {
 
   // Handler when user submits the Main Event Setup Form
   const handleFormSubmit = async (formData: EventFormData) => {
-    const hallInfo = formData.selectedHall
-      ? `${formData.selectedHall.name} (${formData.selectedHall.locality}, ${formData.city}) with capacity for ${formData.selectedHall.capacity.min}-${formData.selectedHall.capacity.max} guests`
-      : `Any premier banquet hall in ${formData.city}`;
+    const effectiveCity = formData.city === 'Other City' && formData.customCityName
+      ? formData.customCityName
+      : formData.city;
 
-    const promptText = `Plan a ${formData.eventType} in ${formData.city} on ${formData.date} (${formData.seasonOrTimeframe}).
+    const venueLabel = formData.customVenueName
+      ? `${formData.customVenueName} in ${effectiveCity}`
+      : formData.selectedHall
+      ? `${formData.selectedHall.name} (${formData.selectedHall.locality}, ${effectiveCity}) with capacity for ${formData.selectedHall.capacity.min}-${formData.selectedHall.capacity.max} guests`
+      : `Any premier banquet hall in ${effectiveCity}`;
+
+    const promptText = `Plan a ${formData.eventType} in ${effectiveCity} on ${formData.date} (${formData.seasonOrTimeframe}).
 - Guest Count: ${formData.guestCount} attendees
 - Total Target Budget: ${formatCurrency(formData.budget, formData.currency)}
-- Selected Venue / Hall: ${hallInfo}
+- Selected Venue / Hall: ${venueLabel}
 - Special Notes & Theme Preferences: ${formData.specialNotes || 'Traditional cultural elegance, authentic regional catering, and structured logistics.'}
 
 Please generate the complete budget breakdown (venue, catering, decor, photography, attire, buffer), milestone execution timeline, vendor action items, and curated theme concepts.`;
@@ -143,6 +140,12 @@ Please generate the complete budget breakdown (venue, catering, decor, photograp
     await executeChatRequest(promptText, currentPlan);
   };
 
+  if (!mounted) {
+    return (
+      <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#EDECE7] text-[#18181B]" />
+    );
+  }
+
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-[#EDECE7] text-[#18181B]">
       {/* Top Application Header with Navigation Pills & Clerk Auth */}
@@ -150,7 +153,6 @@ Please generate the complete budget breakdown (venue, catering, decor, photograp
         currentPlan={currentPlan}
         activeView={activeView}
         onChangeView={(view) => setActiveView(view)}
-        onOpenSettings={() => setIsSettingsModalOpen(true)}
         onOpenSavedModal={() => setIsSavedModalOpen(true)}
         onOpenExportModal={() => setIsExportModalOpen(true)}
         onNewPlan={handleNewPlan}
@@ -204,13 +206,6 @@ Please generate the complete budget breakdown (venue, catering, decor, photograp
       </main>
 
       {/* Application Modals */}
-      <ApiKeyModal
-        isOpen={isSettingsModalOpen}
-        onClose={() => setIsSettingsModalOpen(false)}
-        onSaveKey={handleSaveApiKey}
-        currentKey={customApiKey}
-      />
-
       <SavedPlansModal
         isOpen={isSavedModalOpen}
         onClose={() => setIsSavedModalOpen(false)}

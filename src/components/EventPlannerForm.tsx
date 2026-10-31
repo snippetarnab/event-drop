@@ -31,7 +31,9 @@ export interface EventFormData {
   seasonOrTimeframe: string;
   guestCount: number;
   city: TopCity;
+  customCityName?: string;
   selectedHall: VenueHall | null;
+  customVenueName?: string;
   budget: number;
   currency: string;
   specialNotes: string;
@@ -67,6 +69,8 @@ const EVENT_TYPE_OPTIONS = [
 export function EventPlannerForm({ onSubmit, isLoading, onCancel }: EventPlannerFormProps) {
   const [eventType, setEventType] = useState<'Wedding' | 'Birthday' | 'Community Event'>('Wedding');
   const [city, setCity] = useState<TopCity>('Kolkata');
+  const [customCityName, setCustomCityName] = useState<string>('');
+  const [customVenueName, setCustomVenueName] = useState<string>('');
   const [date, setDate] = useState<string>('2026-12-18');
   const [guestCount, setGuestCount] = useState<number>(150);
   const [budget, setBudget] = useState<number>(800000);
@@ -75,16 +79,10 @@ export function EventPlannerForm({ onSubmit, isLoading, onCancel }: EventPlanner
 
   // Filter halls based on chosen city and event type
   const availableHalls = useMemo(() => {
-    const key = eventType.toLowerCase().includes('wedding')
-      ? 'wedding'
-      : eventType.toLowerCase().includes('birthday')
-      ? 'birthday'
-      : 'community';
-
     return VENUE_HALLS_DATABASE.filter(
       (h) => h.city.toLowerCase() === city.toLowerCase()
     );
-  }, [city, eventType]);
+  }, [city]);
 
   const selectedHall = useMemo(() => {
     return availableHalls.find((h) => h.id === selectedHallId) || availableHalls[0] || null;
@@ -115,7 +113,9 @@ export function EventPlannerForm({ onSubmit, isLoading, onCancel }: EventPlanner
       seasonOrTimeframe: 'December (Winter Peak)',
       guestCount,
       city,
+      customCityName: city === 'Other City' ? customCityName.trim() : undefined,
       selectedHall,
+      customVenueName: city === 'Other City' && customVenueName.trim() ? customVenueName.trim() : undefined,
       budget,
       currency: 'INR',
       specialNotes,
@@ -317,10 +317,50 @@ export function EventPlannerForm({ onSubmit, isLoading, onCancel }: EventPlanner
                   : 'border border-[#E8E6E1] bg-[#FBFBFA] text-[#52525B] hover:border-[#18181B]'
               }`}
             >
-              {c}
+              {c === 'Other City' ? '+ Other City' : c}
             </button>
           ))}
         </div>
+
+        {/* Other City Custom Inputs */}
+        {city === 'Other City' && (
+          <div className="p-4 rounded-2xl border border-dashed border-[#18181B]/40 bg-[#F7F6F2] space-y-3 animate-in fade-in duration-150">
+            <div className="flex items-center gap-2 text-xs font-bold text-[#18181B]">
+              <MapPin className="h-4 w-4 text-[#16A34A]" />
+              <span>Specify Your Custom City & Preferred Venue</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-[#52525B] mb-1">
+                  City / Town Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={customCityName}
+                  onChange={(e) => setCustomCityName(e.target.value)}
+                  placeholder="E.g., Patna, Surat, Indore, Agra, Bhopal, Ranchi, Varanasi..."
+                  className="w-full rounded-xl border border-[#E8E6E1] bg-white px-3.5 py-2 text-xs font-semibold text-[#18181B] focus:border-[#18181B] focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold text-[#52525B] mb-1">
+                  Specific Venue / Hall Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={customVenueName}
+                  onChange={(e) => setCustomVenueName(e.target.value)}
+                  placeholder="E.g., Hotel Maurya Grand Hall, Maharaja Agrasen Bhavan, Local Farmhouse..."
+                  className="w-full rounded-xl border border-[#E8E6E1] bg-white px-3.5 py-2 text-xs font-semibold text-[#18181B] focus:border-[#18181B] focus:outline-none"
+                />
+              </div>
+            </div>
+            <p className="text-[11px] text-[#71717A]">
+              Or choose one of the real venue archetypes below to estimate budget and capacity allocations.
+            </p>
+          </div>
+        )}
 
         {/* Halls Available in Selected City */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
@@ -405,7 +445,11 @@ export function EventPlannerForm({ onSubmit, isLoading, onCancel }: EventPlanner
       {/* SUBMIT BUTTON */}
       <div className="pt-2 flex items-center justify-between">
         <div className="text-xs text-[#71717A]">
-          Selected venue: <strong className="text-[#18181B]">{selectedHall?.name || 'Any hall'}</strong> in {city}
+          Selected venue:{' '}
+          <strong className="text-[#18181B]">
+            {customVenueName || selectedHall?.name || 'Any hall'}
+          </strong>{' '}
+          in {city === 'Other City' && customCityName ? customCityName : city}
         </div>
 
         <button

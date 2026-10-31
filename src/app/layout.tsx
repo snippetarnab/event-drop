@@ -14,8 +14,8 @@ export default function RootLayout({
 }) {
   return (
     <ClerkProvider dynamic>
-      <html lang="en">
-        <body className="min-h-screen text-[#18181B] bg-[#EDECE7] antialiased">
+      <html lang="en" suppressHydrationWarning>
+        <body className="min-h-screen text-[#18181B] bg-[#EDECE7] antialiased" suppressHydrationWarning>
           {children}
         </body>
       </html>

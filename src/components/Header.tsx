@@ -3,7 +3,6 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  SlidersHorizontal,
   Share2,
   Plus,
   CheckSquare,
@@ -24,7 +23,6 @@ interface HeaderProps {
   currentPlan: EventPlan | null;
   activeView: 'form' | 'chat' | 'checklist';
   onChangeView: (view: 'form' | 'chat' | 'checklist') => void;
-  onOpenSettings: () => void;
   onOpenSavedModal: () => void;
   onOpenExportModal: () => void;
   onNewPlan: () => void;
@@ -34,7 +32,6 @@ export function Header({
   currentPlan,
   activeView,
   onChangeView,
-  onOpenSettings,
   onOpenSavedModal,
   onOpenExportModal,
   onNewPlan,
@@ -130,15 +127,6 @@ export function Header({
             <Share2 className="h-4 w-4" />
           </button>
         )}
-
-        {/* Settings button */}
-        <button
-          onClick={onOpenSettings}
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-[#E8E6E1] bg-white text-[#52525B] hover:text-[#18181B] hover:border-[#D4D2CB] shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all"
-          title="Preferences & Key"
-        >
-          <SlidersHorizontal className="h-4 w-4" />
-        </button>
 
         {/* Authentication State: Signed In / Signed Out */}
         <Show when="signed-in">
