@@ -108,15 +108,17 @@ export function Header({
 
       {/* Right controls */}
       <div className="flex items-center gap-2">
-        {/* Saved Plans Button */}
-        <button
-          onClick={onOpenSavedModal}
-          className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-[#E8E6E1] bg-white text-[#52525B] hover:text-[#18181B] hover:border-[#D4D2CB] text-xs font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all"
-          title="Browse Saved Event Plans"
-        >
-          <Bookmark className="h-3.5 w-3.5 text-[#71717A]" />
-          <span className="hidden md:inline">Saved Plans</span>
-        </button>
+        {/* Saved Plans Button: Only visible to authenticated users */}
+        <Show when="signed-in">
+          <button
+            onClick={onOpenSavedModal}
+            className="flex items-center gap-1.5 h-9 px-3 rounded-full border border-[#E8E6E1] bg-white text-[#52525B] hover:text-[#18181B] hover:border-[#D4D2CB] text-xs font-semibold shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all"
+            title="Browse Your Saved Event Plans"
+          >
+            <Bookmark className="h-3.5 w-3.5 text-[#16A34A]" />
+            <span className="hidden md:inline">Saved Plans</span>
+          </button>
+        </Show>
 
         {/* Export / Share button */}
         {currentPlan && (

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { X, Calendar, ArrowRight, RefreshCw, User, Bookmark } from 'lucide-react';
+import { X, Calendar, ArrowRight, RefreshCw, User, Bookmark, Trash2 } from 'lucide-react';
 import { EventSession } from '@/types/event';
 
 interface SavedPlansModalProps {
@@ -22,11 +22,17 @@ export function SavedPlansModal({
   const [sessions, setSessions] = useState<Array<Pick<EventSession, 'id' | 'title' | 'updatedAt' | 'createdAt' | 'userId'>>>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingSessionId, setLoadingSessionId] = useState<string | null>(null);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
 
   const fetchSessions = async () => {
     setIsLoading(true);
     try {
-      const url = userId ? `/api/sessions?userId=${encodeURIComponent(userId)}` : '/api/sessions';
+      if (!userId) {
+        setSessions([]);
+        setIsLoading(false);
+        return;
+      }
+      const url = `/api/sessions?userId=${encodeURIComponent(userId)}`;
       const res = await fetch(url);
       const data = await res.json();
       if (data.success && Array.isArray(data.sessions)) {
@@ -61,6 +67,30 @@ export function SavedPlansModal({
     }
   };
 
+  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
+    e.stopPropagation();
+    if (!window.confirm('Are you sure you want to delete this saved event plan?')) {
+      return;
+    }
+    setDeletingSessionId(sessionId);
+    try {
+      const res = await fetch(`/api/sessions?id=${encodeURIComponent(sessionId)}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      } else {
+        alert('Could not delete plan. Please try again.');
+      }
+    } catch (err) {
+      console.error('Failed to delete session:', err);
+      alert('Error deleting plan.');
+    } finally {
+      setDeletingSessionId(null);
+    }
+  };
+
   if (!isOpen) return null;
 
   return (
@@ -77,13 +107,11 @@ export function SavedPlansModal({
           <div className="flex items-center gap-2">
             <Bookmark className="h-4 w-4 text-[#18181B]" />
             <h3 className="text-lg font-bold text-[#18181B] tracking-tight">
-              Saved Event Plans
+              My Saved Event Plans
             </h3>
           </div>
           <p className="text-xs text-[#71717A] mt-0.5">
-            {userId
-              ? 'Stored securely in Firestore and linked to your account'
-              : 'Recent sessions (Sign in with Clerk to keep them across all devices)'}
+            Stored securely in Firestore and linked to your account
           </p>
         </div>
 
@@ -148,20 +176,35 @@ export function SavedPlansModal({
                     </div>
                   </div>
 
-                  <button
-                    onClick={() => handleSelectSession(item.id)}
-                    disabled={isItemLoading}
-                    className="flex-shrink-0 flex items-center gap-1.5 rounded-full bg-[#18181B] hover:bg-[#27272A] px-3.5 py-1.5 text-xs font-semibold text-white transition-all disabled:opacity-40"
-                  >
-                    {isItemLoading ? (
-                      <RefreshCw className="h-3 w-3 animate-spin" />
-                    ) : (
-                      <>
-                        <span>Open</span>
-                        <ArrowRight className="h-3 w-3" />
-                      </>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => handleDeleteSession(e, item.id)}
+                      disabled={deletingSessionId === item.id}
+                      className="flex h-8 w-8 items-center justify-center rounded-full text-[#8E8E93] hover:text-red-600 hover:bg-red-50 transition-all disabled:opacity-40"
+                      title="Delete saved plan"
+                    >
+                      {deletingSessionId === item.id ? (
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Trash2 className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+
+                    <button
+                      onClick={() => handleSelectSession(item.id)}
+                      disabled={isItemLoading}
+                      className="flex items-center gap-1.5 rounded-full bg-[#18181B] hover:bg-[#27272A] px-3.5 py-1.5 text-xs font-semibold text-white transition-all disabled:opacity-40"
+                    >
+                      {isItemLoading ? (
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <>
+                          <span>Open</span>
+                          <ArrowRight className="h-3 w-3" />
+                        </>
+                      )}
+                    </button>
+                  </div>
                 </div>
               );
             })

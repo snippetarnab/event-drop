@@ -4,6 +4,7 @@ import {
   doc,
   setDoc,
   getDoc,
+  deleteDoc,
   collection,
   getDocs,
   query,
@@ -86,6 +87,23 @@ export async function saveSessionToFirestore(
   } catch (error) {
     console.error('[Firestore] Error saving event plan:', error);
     return { success: true, mode: 'memory' };
+  }
+}
+
+export async function deleteSessionFromFirestore(sessionId: string): Promise<boolean> {
+  inMemorySessions.delete(sessionId);
+  const database = getDbInstance();
+  if (!database) {
+    return true;
+  }
+
+  try {
+    const docRef = doc(database, 'event_plans', sessionId);
+    await deleteDoc(docRef);
+    return true;
+  } catch (error) {
+    console.error('[Firestore] Error deleting event plan:', error);
+    return false;
   }
 }
 

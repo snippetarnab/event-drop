@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { listRecentSessions, getSessionFromFirestore } from '@/lib/firestore';
+import { listRecentSessions, getSessionFromFirestore, deleteSessionFromFirestore } from '@/lib/firestore';
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,3 +22,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ success: false, error: message }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const { searchParams } = new URL(req.url);
+    const id = searchParams.get('id');
+
+    if (!id) {
+      return NextResponse.json({ error: 'Session ID is required' }, { status: 400 });
+    }
+
+    const success = await deleteSessionFromFirestore(id);
+    return NextResponse.json({ success });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to delete session';
+    return NextResponse.json({ success: false, error: message }, { status: 500 });
+  }
+}
+

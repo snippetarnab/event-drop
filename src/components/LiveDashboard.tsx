@@ -26,6 +26,8 @@ import {
   X,
   Building2,
   Star,
+  Trash2,
+  ListChecks,
 } from 'lucide-react';
 import { EventPlan, VendorChecklistItem } from '@/types/event';
 import { formatCurrency, formatNumber } from '@/lib/formatters';
@@ -38,9 +40,12 @@ interface LiveDashboardProps {
 }
 
 export function LiveDashboard({ plan, onUpdatePlan, onSelectPrompt, onClose }: LiveDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'board' | 'budget' | 'schedule' | 'curation'>('board');
+  const [activeTab, setActiveTab] = useState<'checklist' | 'board' | 'budget' | 'schedule' | 'curation'>('checklist');
   const [vendorFilter, setVendorFilter] = useState<string>('all');
+  const [checklistFilter, setChecklistFilter] = useState<'all' | 'pending' | 'completed'>('all');
   const [completedTasks, setCompletedTasks] = useState<Record<string, boolean>>({});
+  const [newCustomTask, setNewCustomTask] = useState('');
+  const [customTasks, setCustomTasks] = useState<Array<{ id: string; text: string; category: string }>>([]);
 
   if (!plan) {
     return (
@@ -112,6 +117,75 @@ export function LiveDashboard({ plan, onUpdatePlan, onSelectPrompt, onClose }: L
     (v) => v.status.toLowerCase() === 'in progress'
   );
 
+  // Unified checklist items from Vendor actions + Timeline tasks + Custom user tasks
+  const allChecklistItems = [
+    ...vendorChecklist.map((v, i) => {
+      const isVendorDone = v.status.toLowerCase() === 'completed' || v.status.toLowerCase() === 'booked' || Boolean(completedTasks[`vendor_${i}`]);
+      return {
+        id: `vendor_${i}`,
+        title: v.actionItem,
+        category: v.category || 'Vendor',
+        isCompleted: isVendorDone,
+        type: 'vendor' as const,
+        index: i,
+      };
+    }),
+    ...timeline.flatMap((stage, sIdx) =>
+      (stage.tasks || []).map((task, tIdx) => ({
+        id: `timeline_${sIdx}_${tIdx}`,
+        title: task,
+        category: stage.milestone,
+        isCompleted: Boolean(completedTasks[`timeline_${sIdx}_${tIdx}`]),
+        type: 'timeline' as const,
+        index: tIdx,
+      }))
+    ),
+    ...customTasks.map((c) => ({
+      id: c.id,
+      title: c.text,
+      category: c.category,
+      isCompleted: Boolean(completedTasks[c.id]),
+      type: 'custom' as const,
+      index: -1,
+    })),
+  ];
+
+  const completedCount = allChecklistItems.filter((item) => item.isCompleted).length;
+  const totalCount = allChecklistItems.length;
+  const progressPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+
+  const filteredChecklistItems = allChecklistItems.filter((item) => {
+    if (checklistFilter === 'pending') return !item.isCompleted;
+    if (checklistFilter === 'completed') return item.isCompleted;
+    return true;
+  });
+
+  const handleToggleChecklistItem = (item: typeof allChecklistItems[0]) => {
+    if (item.type === 'vendor') {
+      const newStatus = item.isCompleted ? 'Pending' : 'Completed';
+      handleVendorStatusChange(item.index, newStatus);
+      setCompletedTasks((prev) => ({ ...prev, [item.id]: !item.isCompleted }));
+    } else {
+      setCompletedTasks((prev) => ({ ...prev, [item.id]: !prev[item.id] }));
+    }
+  };
+
+  const handleAddCustomTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCustomTask.trim()) return;
+    const taskObj = {
+      id: `custom_${Date.now()}`,
+      text: newCustomTask.trim(),
+      category: 'Personal Task',
+    };
+    setCustomTasks((prev) => [taskObj, ...prev]);
+    setNewCustomTask('');
+  };
+
+  const handleDeleteCustomTask = (id: string) => {
+    setCustomTasks((prev) => prev.filter((t) => t.id !== id));
+  };
+
   return (
     <div className="relative flex flex-col h-full overflow-y-auto bg-[#EDECE7] p-4 sm:p-7 space-y-6 pb-24">
       {/* Top Bar with Clean Activity Header */}
@@ -127,7 +201,23 @@ export function LiveDashboard({ plan, onUpdatePlan, onSelectPrompt, onClose }: L
 
         {/* View Switcher Pills & Close */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 bg-[#E2E0D8] p-1 rounded-full text-xs font-semibold">
+          <div className="flex items-center gap-1 bg-[#E2E0D8] p-1 rounded-full text-xs font-semibold overflow-x-auto">
+            <button
+              onClick={() => setActiveTab('checklist')}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full transition-all ${
+                activeTab === 'checklist'
+                  ? 'bg-white text-[#18181B] shadow-[0_1px_3px_rgba(0,0,0,0.06)]'
+                  : 'text-[#71717A] hover:text-[#18181B]'
+              }`}
+            >
+              <CheckSquare className="h-3.5 w-3.5 text-[#16A34A]" />
+              <span>Checklist</span>
+              <span className={`rounded-full px-1.5 py-0.2 text-[10px] font-bold ${
+                activeTab === 'checklist' ? 'bg-[#18181B] text-white' : 'bg-[#D4D2CB] text-[#52525B]'
+              }`}>
+                {completedCount}/{totalCount}
+              </span>
+            </button>
             <button
               onClick={() => setActiveTab('board')}
               className={`px-3.5 py-1.5 rounded-full transition-all ${
@@ -245,6 +335,181 @@ export function LiveDashboard({ plan, onUpdatePlan, onSelectPrompt, onClose }: L
           </div>
         </div>
       </div>
+
+      {/* 0. DEDICATED MASTER CHECKLIST VIEW */}
+      {activeTab === 'checklist' && (
+        <div className="space-y-5">
+          {/* Progress Header Card */}
+          <div className="rounded-3xl border border-[#E8E6E1] bg-white p-5 sm:p-6 shadow-[0_2px_12px_rgba(0,0,0,0.03)] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E8E6E1] pb-4">
+              <div>
+                <span className="text-[11px] font-bold text-[#16A34A] uppercase tracking-wider">
+                  Interactive Tracker
+                </span>
+                <h3 className="text-lg sm:text-xl font-extrabold text-[#18181B] tracking-tight">
+                  Master Event Plan Checklist
+                </h3>
+                <p className="text-xs text-[#71717A] mt-0.5">
+                  Check off vendor actions, ritual milestones, and personal tasks in real time.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="text-right">
+                  <div className="text-lg font-black text-[#18181B]">
+                    {completedCount} <span className="text-xs font-medium text-[#71717A]">/ {totalCount} done</span>
+                  </div>
+                  <div className="text-[11px] font-semibold text-[#16A34A]">
+                    {progressPercentage}% Completed
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="space-y-1.5">
+              <div className="w-full h-2.5 bg-[#F4F3EF] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-[#18181B] rounded-full transition-all duration-300"
+                  style={{ width: `${progressPercentage}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Quick Add Custom Task Input */}
+            <form onSubmit={handleAddCustomTask} className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                value={newCustomTask}
+                onChange={(e) => setNewCustomTask(e.target.value)}
+                placeholder="Add a new custom task or reminder (e.g. Call decorator for stage flowers)..."
+                className="flex-1 rounded-2xl border border-[#E8E6E1] bg-[#F7F6F2] px-4 py-2 text-xs sm:text-sm text-[#18181B] placeholder-[#8E8E93] focus:border-[#18181B] focus:bg-white focus:outline-none transition-all"
+              />
+              <button
+                type="submit"
+                disabled={!newCustomTask.trim()}
+                className="flex items-center gap-1.5 rounded-2xl bg-[#18181B] hover:bg-[#27272A] px-4 py-2 text-xs font-semibold text-white transition-all disabled:opacity-40"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Add Task</span>
+              </button>
+            </form>
+
+            {/* Filter pills */}
+            <div className="flex items-center gap-1.5 pt-2 text-xs font-semibold">
+              <button
+                onClick={() => setChecklistFilter('all')}
+                className={`px-3 py-1 rounded-full transition-all ${
+                  checklistFilter === 'all'
+                    ? 'bg-[#18181B] text-white shadow-sm'
+                    : 'bg-[#F4F3EF] text-[#71717A] hover:text-[#18181B]'
+                }`}
+              >
+                All ({totalCount})
+              </button>
+              <button
+                onClick={() => setChecklistFilter('pending')}
+                className={`px-3 py-1 rounded-full transition-all ${
+                  checklistFilter === 'pending'
+                    ? 'bg-[#18181B] text-white shadow-sm'
+                    : 'bg-[#F4F3EF] text-[#71717A] hover:text-[#18181B]'
+                }`}
+              >
+                Pending ({totalCount - completedCount})
+              </button>
+              <button
+                onClick={() => setChecklistFilter('completed')}
+                className={`px-3 py-1 rounded-full transition-all ${
+                  checklistFilter === 'completed'
+                    ? 'bg-[#18181B] text-white shadow-sm'
+                    : 'bg-[#F4F3EF] text-[#71717A] hover:text-[#18181B]'
+                }`}
+              >
+                Completed ({completedCount})
+              </button>
+            </div>
+          </div>
+
+          {/* Checklist Items List */}
+          <div className="space-y-2.5">
+            {filteredChecklistItems.length === 0 ? (
+              <div className="rounded-3xl border border-[#E8E6E1] bg-white p-8 text-center text-xs text-[#71717A]">
+                No items found for this filter.
+              </div>
+            ) : (
+              filteredChecklistItems.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => handleToggleChecklistItem(item)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                    item.isCompleted
+                      ? 'border-[#E8E6E1] bg-[#FBFBFA] opacity-75'
+                      : 'border-[#E8E6E1] bg-white hover:border-[#18181B] hover:shadow-[0_2px_8px_rgba(0,0,0,0.03)]'
+                  }`}
+                >
+                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                    <button
+                      type="button"
+                      className="mt-0.5 flex-shrink-0 text-[#8E8E93] transition-colors"
+                    >
+                      {item.isCompleted ? (
+                        <div className="h-5 w-5 rounded-lg bg-[#16A34A] text-white flex items-center justify-center shadow-sm">
+                          <Check className="h-3.5 w-3.5 stroke-[3]" />
+                        </div>
+                      ) : (
+                        <div className="h-5 w-5 rounded-lg border-2 border-[#D4D2CB] bg-white hover:border-[#18181B] transition-colors" />
+                      )}
+                    </button>
+
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="rounded-full bg-[#F4F3EF] px-2.5 py-0.5 text-[10px] font-bold text-[#52525B]">
+                          {item.category}
+                        </span>
+                        {item.type === 'vendor' && (
+                          <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                            Vendor Action
+                          </span>
+                        )}
+                        {item.type === 'timeline' && (
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
+                            Milestone Schedule
+                          </span>
+                        )}
+                        {item.type === 'custom' && (
+                          <span className="text-[10px] font-semibold text-blue-700 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                            Personal
+                          </span>
+                        )}
+                      </div>
+
+                      <p className={`text-xs sm:text-sm font-medium leading-relaxed ${
+                        item.isCompleted ? 'line-through text-[#8E8E93]' : 'text-[#18181B]'
+                      }`}>
+                        {item.title}
+                      </p>
+                    </div>
+                  </div>
+
+                  {item.type === 'custom' && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteCustomTask(item.id);
+                      }}
+                      className="h-7 w-7 rounded-full text-[#8E8E93] hover:text-red-600 hover:bg-red-50 flex items-center justify-center transition-all flex-shrink-0"
+                      title="Remove task"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 1. BOARD VIEW: MATCHING THE EXACT CARDS FROM THE USER'S IMAGE */}
       {(activeTab === 'board' || activeTab === 'schedule') && (
@@ -642,7 +907,17 @@ export function LiveDashboard({ plan, onUpdatePlan, onSelectPrompt, onClose }: L
       )}
 
       {/* FLOATING DARK ISLAND DOCK (Matching the exact floating pill in the image) */}
-      <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-7 bg-[#1E2022] text-white px-6 py-3 rounded-full shadow-[0_10px_25px_rgba(0,0,0,0.25)] border border-[#333538]">
+      <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-30 flex items-center gap-6 bg-[#1E2022] text-white px-6 py-3 rounded-full shadow-[0_10px_25px_rgba(0,0,0,0.25)] border border-[#333538]">
+        <button
+          onClick={() => setActiveTab('checklist')}
+          className={`flex items-center justify-center transition-all ${
+            activeTab === 'checklist' ? 'text-white scale-110' : 'text-[#8E8E93] hover:text-white'
+          }`}
+          title="Master Checklist"
+        >
+          <ListChecks className="h-4 w-4" />
+        </button>
+
         <button
           onClick={() => setActiveTab('board')}
           className={`flex items-center justify-center transition-all ${
